@@ -1,0 +1,20 @@
+server:
+  ssl:
+    enabled: ${SSL_ENABLED:true}
+    key-store: ${SSL_KEYSTORE_PATH:}
+    key-store-password: ${SSL_KEYSTORE_PASSWORD:}
+  forward-headers-strategy: native # 리버스 프록시/로드밸런서 뒤에서 HTTPS 인식
+
+management:
+  tracing:
+    sampling:
+      probability: 0.1 # 운영 환경 10% 샘플링
+
+auth-server:
+  signing-key:
+    source: database # jwk_keys 테이블에서 AES-256 복호화 후 EC(P-256) 키 로드
+
+logging:
+  level:
+    com.haenaryn.authserver: INFO
+    org.springframework.security: WARN

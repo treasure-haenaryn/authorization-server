@@ -1,0 +1,63 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '4.0.7'
+    id 'io.spring.dependency-management' version '1.1.7'
+}
+
+group = 'com.haenaryn'
+version = '0.0.1-SNAPSHOT'
+description = 'authorization-server'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // OAuth2 Authorization Server (Authorization Code + OIDC, Client Credentials)
+    implementation 'org.springframework.boot:spring-boot-starter-oauth2-authorization-server'
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+
+    // JPA (refresh_token_histories 등 연관관계가 있는 도메인)
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+
+    // PostgreSQL
+    runtimeOnly 'org.postgresql:postgresql'
+
+    // Flyway (spring-boot-starter-flyway 사용 필수 — Spring Boot 4 모듈화로
+    // flyway-core만 있으면 AutoConfiguration 비활성화됨. api-gateway와 동일 전략)
+    implementation 'org.springframework.boot:spring-boot-starter-flyway'
+    implementation 'org.flywaydb:flyway-database-postgresql'
+
+    // Redis (refresh token 캐시, 블랙리스트, 로그인 실패 카운트)
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+
+    // JWK/JWT (EC(ES256) 키페어 관리, JWKS 응답 구성 — api-gateway와 동일 라이브러리로 통일)
+    implementation 'com.nimbusds:nimbus-jose-jwt:9.40'
+
+    // Actuator + Prometheus (헬스체크, 메트릭)
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'io.micrometer:micrometer-registry-prometheus'
+
+    // OpenTelemetry
+    implementation 'org.springframework.boot:spring-boot-starter-opentelemetry'
+
+    // Lombok
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+
+    // Test
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.security:spring-security-test'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}
