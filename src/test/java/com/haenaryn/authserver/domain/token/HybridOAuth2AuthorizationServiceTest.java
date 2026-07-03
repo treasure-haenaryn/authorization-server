@@ -12,6 +12,7 @@ import org.springframework.security.oauth2.core.ClientAuthenticationMethod;
 import org.springframework.security.oauth2.core.OAuth2RefreshToken;
 import org.springframework.security.oauth2.server.authorization.OAuth2Authorization;
 import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService;
+import org.springframework.security.oauth2.server.authorization.OAuth2TokenType;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClient;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClientRepository;
 
@@ -141,6 +142,32 @@ class HybridOAuth2AuthorizationServiceTest {
 
         assertThat(result).isSameAs(expected);
         verify(refreshTokenRepository, never()).bulkRevokeByFamilyId(anyString(), any(), anyString());
+    }
+
+    @Test
+    void findByToken_with_non_refresh_token_type_skips_our_ledger_entirely() {
+        // tokenType이 REFRESH_TOKEN이 아님이 명확하면, 우리 refresh_tokens 테이블을
+        // 조회할 것도 없이 바로 delegate로 위임해야 한다 (성능 최적화 — 헛도는 조회 제거).
+        OAuth2Authorization expected = authorizationWithRefreshToken("auth-access", "some-access-token-value");
+        when(delegate.findByToken("some-access-token-value", OAuth2TokenType.ACCESS_TOKEN)).thenReturn(expected);
+
+        OAuth2Authorization result = service.findByToken("some-access-token-value", OAuth2TokenType.ACCESS_TOKEN);
+
+        assertThat(result).isSameAs(expected);
+        verify(refreshTokenRepository, never()).findByTokenHash(anyString()); // 짧은 회로로 아예 안 불림
+    }
+
+    @Test
+    void findByToken_with_refresh_token_type_still_checks_our_ledger() {
+        // REFRESH_TOKEN으로 명시된 경우는 짧은 회로를 타지 않고 기존처럼 우리 테이블을 먼저 확인해야 한다.
+        when(refreshTokenRepository.findByTokenHash(anyString())).thenReturn(Optional.empty());
+        OAuth2Authorization expected = authorizationWithRefreshToken("auth-rt", "some-refresh-token-value");
+        when(delegate.findByToken("some-refresh-token-value", OAuth2TokenType.REFRESH_TOKEN)).thenReturn(expected);
+
+        OAuth2Authorization result = service.findByToken("some-refresh-token-value", OAuth2TokenType.REFRESH_TOKEN);
+
+        assertThat(result).isSameAs(expected);
+        verify(refreshTokenRepository).findByTokenHash(anyString()); // 짧은 회로를 타지 않고 정상적으로 우리 테이블 확인
     }
 
     @Test
