@@ -1,0 +1,88 @@
+spring:
+  application:
+    name: authorization-server
+
+  # Virtual Thread 활성화 (api-gateway와 동일 전략)
+  threads:
+    virtual:
+      enabled: true
+
+  # DataSource
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/authserver}
+    username: ${DB_USERNAME:authserver}
+    password: ${DB_PASSWORD:authserver}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      initialization-fail-timeout: 0 # DB 연결 실패 시 앱 기동 실패 방지 (0 = 대기)
+      connection-timeout: 30000
+      validation-timeout: 5000
+
+  jpa:
+    hibernate:
+      ddl-auto: validate # 스키마는 Flyway가 관리, JPA는 검증만
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+
+  # Flyway
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    locations: classpath:db/migration
+
+  # Redis (refresh token 캐시, 블랙리스트, 로그인 실패 카운트, 인가 코드)
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+
+server:
+  port: ${SERVER_PORT:9000}
+
+# Actuator + Prometheus + OpenTelemetry
+management:
+  endpoints:
+    web:
+      exposure:
+        include:
+          - health
+          - info
+          - prometheus
+          - metrics
+          - flyway
+  endpoint:
+    health:
+      show-details: always
+    flyway:
+      enabled: true
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+  opentelemetry:
+    resource-attributes:
+      service.name: authorization-server
+  otlp:
+    metrics:
+      export:
+        url: ${OTLP_ENDPOINT:http://localhost:4318}/v1/metrics
+        enabled: ${OTLP_ENABLED:false}
+    tracing:
+      export:
+        otlp:
+          endpoint: ${OTLP_ENDPOINT:http://localhost:4318}/v1/traces
+
+# Authorization Server 커스텀 설정
+auth-server:
+  token:
+    access-token-ttl-minutes: 30
+    id-token-ttl-minutes: 30
+    refresh-token-ttl-days: 7
+  security:
+    login-fail-lock-threshold: 5
+    login-fail-window-hours: 1
+  signing-key:
+    source: ${SIGNING_KEY_SOURCE:in-memory}
