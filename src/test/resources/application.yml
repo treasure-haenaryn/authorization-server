@@ -1,0 +1,9 @@
+spring:
+  flyway:
+    enabled: false # @DataJpaTest는 H2를 쓰는데, 마이그레이션 SQL이 PostgreSQL 문법(BIGSERIAL 등)이라 비활성화
+  jpa:
+    hibernate:
+      ddl-auto: create-drop # 테스트 시점에는 엔티티 기준으로 스키마 자동 생성
+    properties:
+      hibernate:
+        format_sql: true
