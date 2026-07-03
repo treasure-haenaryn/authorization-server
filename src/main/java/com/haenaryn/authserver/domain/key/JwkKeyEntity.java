@@ -38,11 +38,9 @@ public class JwkKeyEntity {
     @Column(nullable = false)
     private String algorithm;
 
-    @Lob
     @Column(name = "encrypted_private_key", nullable = false)
     private String encryptedPrivateKey;
 
-    @Lob
     @Column(name = "public_key", nullable = false)
     private String publicKey;
 
