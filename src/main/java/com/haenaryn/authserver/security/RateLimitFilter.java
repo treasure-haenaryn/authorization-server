@@ -65,6 +65,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
             }
 
             long retryAfterSeconds = Math.max(1, probe.getNanosToWaitForRefill() / 1_000_000_000L);
+            log.info("Rate Limit 초과로 차단: key={}, retryAfterSeconds={}", key, retryAfterSeconds);
             writeTooManyRequests(response, retryAfterSeconds);
         } catch (Exception e) {
             // Fail-open

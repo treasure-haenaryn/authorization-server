@@ -43,6 +43,14 @@ public class User {
     @Column(name = "account_locked_at")
     private LocalDateTime accountLockedAt;
 
+    /** Redis 장애 시에만 쓰이는 로그인 실패 폴백 카운터. */
+    @Column(name = "failed_login_count", nullable = false)
+    private int failedLoginCount;
+
+    /** 폴백 카운터의 윈도우 시작 시각. */
+    @Column(name = "failed_login_window_started_at")
+    private LocalDateTime failedLoginWindowStartedAt;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -74,5 +82,23 @@ public class User {
     public boolean isLockExpired(long windowHours) {
         return accountLocked && accountLockedAt != null
                 && accountLockedAt.plusHours(windowHours).isBefore(LocalDateTime.now());
+    }
+
+    /** Redis 장애 시 폴백 경로. 윈도우 경과/최초 실패면 1부터 다시 세고, 아니면 누적 증가. */
+    public int registerFailedLoginFallback(long windowHours) {
+        LocalDateTime now = LocalDateTime.now();
+        if (failedLoginWindowStartedAt == null || failedLoginWindowStartedAt.plusHours(windowHours).isBefore(now)) {
+            failedLoginCount = 1;
+            failedLoginWindowStartedAt = now;
+        } else {
+            failedLoginCount++;
+        }
+        return failedLoginCount;
+    }
+
+    /** 로그인 성공 시 호출 — 폴백 카운터도 함께 리셋한다. */
+    public void resetFailedLoginFallback() {
+        this.failedLoginCount = 0;
+        this.failedLoginWindowStartedAt = null;
     }
 }

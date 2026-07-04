@@ -1,5 +1,6 @@
 package com.haenaryn.authserver.domain.token;
 
+import com.haenaryn.authserver.domain.audit.AuditLogService;
 import com.haenaryn.authserver.domain.user.User;
 import com.haenaryn.authserver.domain.user.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -49,6 +50,8 @@ class HybridOAuth2AuthorizationServiceTest {
     private UserRepository userRepository;
     @Mock
     private RegisteredClientRepository registeredClientRepository;
+    @Mock
+    private AuditLogService auditLogService;
 
     private HybridOAuth2AuthorizationService service;
     private RegisteredClient registeredClient;
@@ -58,7 +61,7 @@ class HybridOAuth2AuthorizationServiceTest {
     void setUp() {
         service = new HybridOAuth2AuthorizationService(
                 delegate, refreshTokenRepository, refreshTokenHistoryRepository,
-                userRepository, registeredClientRepository
+                userRepository, registeredClientRepository, auditLogService
         );
 
         registeredClient = RegisteredClient.withId("internal-client-id")

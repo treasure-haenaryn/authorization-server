@@ -1,5 +1,7 @@
 package com.haenaryn.authserver.domain.token;
 
+import com.haenaryn.authserver.domain.audit.AuditEventType;
+import com.haenaryn.authserver.domain.audit.AuditLogService;
 import com.haenaryn.authserver.domain.user.User;
 import com.haenaryn.authserver.domain.user.UserRepository;
 import org.slf4j.Logger;
@@ -31,17 +33,20 @@ public class HybridOAuth2AuthorizationService implements OAuth2AuthorizationServ
     private final RefreshTokenHistoryRepository refreshTokenHistoryRepository;
     private final UserRepository userRepository;
     private final RegisteredClientRepository registeredClientRepository;
+    private final AuditLogService auditLogService;
 
     public HybridOAuth2AuthorizationService(OAuth2AuthorizationService delegate,
                                              RefreshTokenRepository refreshTokenRepository,
                                              RefreshTokenHistoryRepository refreshTokenHistoryRepository,
                                              UserRepository userRepository,
-                                             RegisteredClientRepository registeredClientRepository) {
+                                             RegisteredClientRepository registeredClientRepository,
+                                             AuditLogService auditLogService) {
         this.delegate = delegate;
         this.refreshTokenRepository = refreshTokenRepository;
         this.refreshTokenHistoryRepository = refreshTokenHistoryRepository;
         this.userRepository = userRepository;
         this.registeredClientRepository = registeredClientRepository;
+        this.auditLogService = auditLogService;
     }
 
     @Override
@@ -57,6 +62,7 @@ public class HybridOAuth2AuthorizationService implements OAuth2AuthorizationServ
     public void remove(OAuth2Authorization authorization) {
         delegate.remove(authorization);
         refreshTokenRepository.bulkRevokeByFamilyId(authorization.getId(), LocalDateTime.now(), "system-authorization-removed");
+        auditLogService.record(AuditEventType.REFRESH_TOKEN_REVOKED, authorization.getPrincipalName(), null);
     }
 
     @Override
@@ -106,6 +112,9 @@ public class HybridOAuth2AuthorizationService implements OAuth2AuthorizationServ
                 .previousToken(reusedToken)
                 .eventType(RefreshTokenEventType.REUSE_DETECTED)
                 .build());
+
+        auditLogService.record(AuditEventType.REFRESH_TOKEN_REUSE_DETECTED,
+                reusedToken.getUser().getEmail(), "familyId=" + reusedToken.getFamilyId());
 
         OAuth2Authorization compromised = delegate.findById(reusedToken.getFamilyId());
         if (compromised != null) {
@@ -169,12 +178,19 @@ public class HybridOAuth2AuthorizationService implements OAuth2AuthorizationServ
         // 재조회 없이 프록시 참조로 FK만 연결.
         RefreshToken saved = refreshTokenRepository.getReferenceById(newTokenId.get());
 
+        boolean isRotation = previousActive.isPresent();
         refreshTokenHistoryRepository.save(RefreshTokenHistory.builder()
                 .user(user)
                 .familyId(familyId)
                 .previousToken(previousActive.orElse(null))
                 .newToken(saved)
-                .eventType(previousActive.isEmpty() ? RefreshTokenEventType.ISSUED : RefreshTokenEventType.ROTATED)
+                .eventType(isRotation ? RefreshTokenEventType.ROTATED : RefreshTokenEventType.ISSUED)
                 .build());
+
+        auditLogService.record(
+                isRotation ? AuditEventType.REFRESH_TOKEN_ROTATED : AuditEventType.REFRESH_TOKEN_ISSUED,
+                user.getEmail(),
+                "familyId=" + familyId
+        );
     }
 }

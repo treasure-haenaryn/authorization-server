@@ -56,6 +56,12 @@ management:
   endpoint:
     health:
       show-details: always
+      probes:
+        enabled: true # /actuator/health/liveness, /actuator/health/readiness 노출
+      group:
+        readiness:
+          # Redis(rateLimitRedis 포함)는 의도적으로 포함하지 않음
+          include: readinessState,db
     flyway:
       enabled: true
   metrics:

@@ -1,5 +1,6 @@
 package com.haenaryn.authserver.config;
 
+import com.haenaryn.authserver.domain.audit.AuditLogService;
 import com.haenaryn.authserver.domain.token.HybridOAuth2AuthorizationService;
 import com.haenaryn.authserver.domain.token.RefreshTokenHistoryRepository;
 import com.haenaryn.authserver.domain.token.RefreshTokenRepository;
@@ -17,6 +18,7 @@ import org.springframework.security.oauth2.server.authorization.client.Registere
  * <p>authorization_code/access_token/id_token은 {@link JdbcOAuth2AuthorizationService}에, refresh_token만
  * {@link HybridOAuth2AuthorizationService}가 가로채서 우리 {@code refresh_tokens} 테이블로 관리한다.</p>
  *
+ * <p>설계 배경/대안 검토: {@code docs/adr/0001-hybrid-oauth2-authorization-persistence.md}</p>
  */
 @Configuration
 public class AuthorizationServiceConfig {
@@ -26,13 +28,14 @@ public class AuthorizationServiceConfig {
                                                              RegisteredClientRepository registeredClientRepository,
                                                              RefreshTokenRepository refreshTokenRepository,
                                                              RefreshTokenHistoryRepository refreshTokenHistoryRepository,
-                                                             UserRepository userRepository) {
+                                                             UserRepository userRepository,
+                                                             AuditLogService auditLogService) {
         JdbcOAuth2AuthorizationService jdbcDelegate =
                 new JdbcOAuth2AuthorizationService(jdbcTemplate, registeredClientRepository);
 
         return new HybridOAuth2AuthorizationService(
                 jdbcDelegate, refreshTokenRepository, refreshTokenHistoryRepository,
-                userRepository, registeredClientRepository
+                userRepository, registeredClientRepository, auditLogService
         );
     }
 }
