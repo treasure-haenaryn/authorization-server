@@ -1,0 +1,63 @@
+services:
+  auth-postgres:
+    image: postgres:16
+    container_name: auth-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: authserver
+      POSTGRES_PASSWORD: ${AUTH_DB_PASSWORD:-authserver}
+      POSTGRES_DB: authserver
+    ports:
+      # 호스트에서 직접 psql로 붙어서 디버깅할 때만 필요. 컨테이너 간 통신은
+      # 서비스명(auth-postgres:5432)으로 이루어지므로 이 매핑 자체는 없어도 동작함.
+      - "5433:5432"
+    volumes:
+      - auth_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U authserver -d authserver"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  auth-redis:
+    image: redis:7-alpine
+    container_name: auth-redis
+    restart: unless-stopped
+    ports:
+      - "6380:6379"   # api-gateway 등 다른 프로젝트의 Redis(6379)와 겹치지 않도록 분리
+    volumes:
+      - auth_redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # 애플리케이션 컨테이너 자체는 지금 단계에서는 주석 처리.
+  # 지금은 IntelliJ에서 직접 bootRun/디버그로 띄우고, DB/Redis만 컨테이너로 띄워서 붙는 게
+  # 개발 사이클(재시작/디버깅 속도) 면에서 더 편함. 나중에 이 프로젝트를 컨테이너 이미지로
+  # 빌드해서 상위 통합 compose(api-gateway + authorization-server)에서 같이 띄울 때
+  # 아래 블록을 활성화하면 됨.
+  #
+  # auth-server:
+  #   build: .
+  #   container_name: auth-server
+  #   restart: unless-stopped
+  #   ports:
+  #     - "9000:9000"
+  #   environment:
+  #     SPRING_PROFILES_ACTIVE: dev
+  #     SPRING_DATASOURCE_URL: jdbc:postgresql://auth-postgres:5432/authserver
+  #     SPRING_DATASOURCE_USERNAME: authserver
+  #     SPRING_DATASOURCE_PASSWORD: ${AUTH_DB_PASSWORD:-authserver_local_pw}
+  #     SPRING_DATA_REDIS_HOST: auth-redis
+  #     SPRING_DATA_REDIS_PORT: 6379
+  #   depends_on:
+  #     auth-postgres:
+  #       condition: service_healthy
+  #     auth-redis:
+  #       condition: service_healthy
+
+volumes:
+  auth_pgdata:
+  auth_redisdata:

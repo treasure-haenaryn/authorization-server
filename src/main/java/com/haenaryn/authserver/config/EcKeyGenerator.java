@@ -1,5 +1,6 @@
 package com.haenaryn.authserver.config;
 
+import com.nimbusds.jose.Algorithm;
 import com.nimbusds.jose.jwk.Curve;
 import com.nimbusds.jose.jwk.ECKey;
 
@@ -25,6 +26,11 @@ public final class EcKeyGenerator {
     /**
      * 새 EC(P-256) 키페어를 생성하고 Nimbus {@link ECKey}(JWK) 형태로 반환한다.
      * keyID는 랜덤 UUID — JWKS에서 kid로 노출되어 클라이언트/게이트웨이가 키를 식별하는 데 사용된다.
+     *
+     * <p>{@code .algorithm(ES256)}을 명시하는 이유: JWK의 {@code alg} 필드가 비어 있으면
+     * NimbusJwtEncoder가 서명 시점에 알고리즘을 추론해야 하는데, 곡선(P-256)만으로는
+     * ES256/ES384가 모호할 수 있다. 알고리즘을 키 생성 시점에 고정해두면 이런 모호함
+     * 자체가 발생하지 않는다.</p>
      */
     public static ECKey generate() {
         KeyPair keyPair = generateKeyPair();
@@ -34,6 +40,7 @@ public final class EcKeyGenerator {
         return new ECKey.Builder(CURVE, publicKey)
                 .privateKey(privateKey)
                 .keyID(UUID.randomUUID().toString())
+                .algorithm(new Algorithm("ES256"))
                 .build();
     }
 
