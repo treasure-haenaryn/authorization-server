@@ -5,6 +5,7 @@ import com.haenaryn.authserver.domain.user.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.oauth2.core.AuthorizationGrantType;
@@ -18,11 +19,12 @@ import org.springframework.security.oauth2.server.authorization.client.Registere
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.List;
+import java.time.LocalDateTime;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -70,9 +72,6 @@ class HybridOAuth2AuthorizationServiceTest {
                 .build();
 
         user = User.builder().email("lee@haenaryn.com").passwordHash("hashed").build();
-
-        when(refreshTokenRepository.save(any(RefreshToken.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
     }
 
     private OAuth2Authorization authorizationWithRefreshToken(String authorizationId, String rawRefreshTokenValue) {
@@ -87,18 +86,39 @@ class HybridOAuth2AuthorizationServiceTest {
                 .build();
     }
 
+    /** insertIfAbsentReturningId 성공 후 getReferenceById가 돌려줄 프록시를 흉내낸 엔티티. */
+    private RefreshToken persistedRefreshToken(String familyId) {
+        return RefreshToken.builder()
+                .tokenHash("irrelevant-for-these-tests")
+                .familyId(familyId)
+                .user(user)
+                .clientId("oidc-client")
+                .expiresAt(LocalDateTime.now().plusDays(7))
+                .build();
+    }
+
+    /** insertIfAbsentReturningId 호출을 성공(새 id 반환)으로 스텁하고, getReferenceById도 준비해준다. */
+    private void stubSuccessfulInsert(String familyId) {
+        when(refreshTokenRepository.insertIfAbsentReturningId(anyString(), eq(familyId), any(), anyString(), any()))
+                .thenReturn(Optional.of(42L));
+        when(refreshTokenRepository.getReferenceById(42L))
+                .thenReturn(persistedRefreshToken(familyId));
+    }
+
     @Test
     void save_records_new_refresh_token_with_family_id_equal_to_authorization_id() {
-        when(refreshTokenRepository.findByTokenHash(anyString())).thenReturn(Optional.empty());
-        when(refreshTokenRepository.findAllByFamilyId(anyString())).thenReturn(List.of());
+        when(refreshTokenRepository.findFirstByFamilyIdAndRevokedFalse(anyString())).thenReturn(Optional.empty());
         when(userRepository.findByEmail("lee@haenaryn.com")).thenReturn(Optional.of(user));
         when(registeredClientRepository.findById("internal-client-id")).thenReturn(registeredClient);
+        stubSuccessfulInsert("auth-1");
 
         OAuth2Authorization authorization = authorizationWithRefreshToken("auth-1", "raw-refresh-token-v1");
 
         service.save(authorization);
 
-        verify(delegate).save(authorization);
+        verify(delegate).save(any(OAuth2Authorization.class));
+        verify(refreshTokenRepository).insertIfAbsentReturningId(anyString(), eq("auth-1"), any(), eq("oidc-client"), any());
+        verify(refreshTokenRepository, never()).bulkRevokeByFamilyId(eq("auth-1"), any(), eq("system-rotated"));
 
         RefreshTokenHistory capturedHistory = captureLastSavedHistory();
         assertThat(capturedHistory.getEventType()).isEqualTo(RefreshTokenEventType.ISSUED);
@@ -106,30 +126,74 @@ class HybridOAuth2AuthorizationServiceTest {
     }
 
     @Test
-    void save_called_again_with_new_refresh_token_marks_previous_as_rotated() {
+    void save_skips_history_when_insert_is_ignored_due_to_duplicate() {
+        // insertIfAbsentReturningId가 빈 Optional(이미 존재해서 무시됨)을 반환하면,
+        // 같은 authorization을 중복 save()한 것으로 보고 히스토리도 남기지 않아야 한다.
+        when(refreshTokenRepository.findFirstByFamilyIdAndRevokedFalse(anyString())).thenReturn(Optional.empty());
+        when(userRepository.findByEmail("lee@haenaryn.com")).thenReturn(Optional.of(user));
+        when(registeredClientRepository.findById("internal-client-id")).thenReturn(registeredClient);
+        when(refreshTokenRepository.insertIfAbsentReturningId(anyString(), anyString(), any(), anyString(), any()))
+                .thenReturn(Optional.empty());
+
+        OAuth2Authorization authorization = authorizationWithRefreshToken("auth-dup", "raw-refresh-token-v1");
+
+        service.save(authorization);
+
+        verify(delegate).save(any(OAuth2Authorization.class)); // delegate 저장은 여전히 일어남
+        verify(refreshTokenHistoryRepository, never()).save(any(RefreshTokenHistory.class));
+        verify(refreshTokenRepository, never()).getReferenceById(anyLong()); // 삽입 실패 시 참조도 안 만듦
+    }
+
+    @Test
+    void save_sends_delegate_a_copy_with_redacted_refresh_token_value() {
+        // oauth2_authorization.refresh_token_value에 원문이 새지 않아야 한다 —
+        // delegate로 넘어가는 객체의 refresh_token 값은 원문과 달라야 함.
+        when(refreshTokenRepository.findFirstByFamilyIdAndRevokedFalse(anyString())).thenReturn(Optional.empty());
+        when(userRepository.findByEmail("lee@haenaryn.com")).thenReturn(Optional.of(user));
+        when(registeredClientRepository.findById("internal-client-id")).thenReturn(registeredClient);
+        stubSuccessfulInsert("auth-redact");
+
+        OAuth2Authorization authorization = authorizationWithRefreshToken("auth-redact", "raw-refresh-token-v1");
+
+        service.save(authorization);
+
+        ArgumentCaptor<OAuth2Authorization> captor = ArgumentCaptor.forClass(OAuth2Authorization.class);
+        verify(delegate).save(captor.capture());
+
+        OAuth2Authorization sentToDelegate = captor.getValue();
+        assertThat(sentToDelegate.getRefreshToken().getToken().getTokenValue())
+                .isNotEqualTo("raw-refresh-token-v1");
+        // id/principalName 등 다른 필드는 원본 그대로 유지되어야 함
+        assertThat(sentToDelegate.getId()).isEqualTo("auth-redact");
+        assertThat(sentToDelegate.getPrincipalName()).isEqualTo("lee@haenaryn.com");
+    }
+
+    @Test
+    void save_called_again_with_new_refresh_token_bulk_revokes_previous_and_marks_history_rotated() {
         RefreshToken previous = RefreshToken.builder()
                 .tokenHash(TokenHasher.sha256("raw-refresh-token-v1"))
                 .familyId("auth-1")
                 .user(user)
                 .clientId("oidc-client")
-                .expiresAt(java.time.LocalDateTime.now().plusDays(7))
+                .expiresAt(LocalDateTime.now().plusDays(7))
                 .build();
 
-        when(refreshTokenRepository.findByTokenHash(anyString())).thenReturn(Optional.empty());
-        when(refreshTokenRepository.findAllByFamilyId("auth-1")).thenReturn(List.of(previous));
+        when(refreshTokenRepository.findFirstByFamilyIdAndRevokedFalse("auth-1")).thenReturn(Optional.of(previous));
         when(userRepository.findByEmail("lee@haenaryn.com")).thenReturn(Optional.of(user));
         when(registeredClientRepository.findById("internal-client-id")).thenReturn(registeredClient);
+        stubSuccessfulInsert("auth-1");
 
         // 같은 authorization id(=family_id), 새 refresh token 값 -> rotation으로 취급돼야 함
         OAuth2Authorization rotated = authorizationWithRefreshToken("auth-1", "raw-refresh-token-v2");
 
         service.save(rotated);
 
-        assertThat(previous.isRevoked()).isTrue();
-        assertThat(previous.getRevokedBy()).isEqualTo("system-rotated");
+        // 실제 폐기는 벌크 UPDATE 한 번으로 처리 — DB 위임이라 mock에선 이 호출 자체를 검증
+        verify(refreshTokenRepository).bulkRevokeByFamilyId(eq("auth-1"), any(), eq("system-rotated"));
 
         RefreshTokenHistory capturedHistory = captureLastSavedHistory();
         assertThat(capturedHistory.getEventType()).isEqualTo(RefreshTokenEventType.ROTATED);
+        assertThat(capturedHistory.getPreviousToken()).isSameAs(previous);
     }
 
     @Test
@@ -171,19 +235,42 @@ class HybridOAuth2AuthorizationServiceTest {
     }
 
     @Test
+    void findByToken_with_valid_ledger_entry_looks_up_delegate_by_id_not_by_token_value() {
+        // delegate에는 redacted 값만 있으므로, 유효한 토큰이 확인되면 원문이 아니라
+        // family_id(=authorization id)로 delegate.findById()를 호출해야 한다.
+        RefreshToken valid = RefreshToken.builder()
+                .tokenHash(TokenHasher.sha256("valid-refresh-token"))
+                .familyId("auth-valid")
+                .user(user)
+                .clientId("oidc-client")
+                .expiresAt(LocalDateTime.now().plusDays(7))
+                .build();
+
+        when(refreshTokenRepository.findByTokenHash(anyString())).thenReturn(Optional.of(valid));
+        OAuth2Authorization expected = authorizationWithRefreshToken("auth-valid", "redacted");
+        when(delegate.findById("auth-valid")).thenReturn(expected);
+
+        OAuth2Authorization result = service.findByToken("valid-refresh-token", OAuth2TokenType.REFRESH_TOKEN);
+
+        assertThat(result).isSameAs(expected);
+        verify(delegate).findById("auth-valid");
+        verify(delegate, never()).findByToken(eq("valid-refresh-token"), any());
+    }
+
+    @Test
     void findByToken_with_already_revoked_token_triggers_reuse_detection() {
         RefreshToken revoked = RefreshToken.builder()
                 .tokenHash(TokenHasher.sha256("stolen-token"))
                 .familyId("auth-3")
                 .user(user)
                 .clientId("oidc-client")
-                .expiresAt(java.time.LocalDateTime.now().plusDays(7))
+                .expiresAt(LocalDateTime.now().plusDays(7))
                 .build();
         revoked.revoke("system-rotated"); // 이미 한 번 교체되어 폐기된 상태
 
         when(refreshTokenRepository.findByTokenHash(anyString())).thenReturn(Optional.of(revoked));
-        OAuth2Authorization compromised = authorizationWithRefreshToken("auth-3", "stolen-token");
-        when(delegate.findByToken("stolen-token", null)).thenReturn(compromised);
+        OAuth2Authorization compromised = authorizationWithRefreshToken("auth-3", "redacted");
+        when(delegate.findById("auth-3")).thenReturn(compromised);
 
         OAuth2Authorization result = service.findByToken("stolen-token", null);
 
