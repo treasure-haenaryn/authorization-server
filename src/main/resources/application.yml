@@ -85,6 +85,10 @@ auth-server:
   security:
     login-fail-lock-threshold: 5
     login-fail-window-hours: 1
+    require-https: false # prod에서만 true로 오버라이드 (application-prod.yml)
+  rate-limit:
+    capacity: 10 # 버킷 최대 용량 (순간 버스트 허용량)
+    refill-tokens-per-minute: 10 # 분당 리필 토큰 수 (평균 처리율)
   signing-key:
     source: ${SIGNING_KEY_SOURCE:in-memory}
     encryption-key: ${ENCRYPTION_KEY:} # source=database일 때만 사용, Base64 인코딩된 AES-256 키(32바이트)

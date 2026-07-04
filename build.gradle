@@ -26,7 +26,6 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-security'
 
     // Spring Boot 4.0: spring-boot-starter-web -> spring-boot-starter-webmvc로 변경
-    // (Spring MVC / WebFlux 구분을 명확히 하기 위함)
     implementation 'org.springframework.boot:spring-boot-starter-webmvc'
 
     // JPA
@@ -35,18 +34,23 @@ dependencies {
     // PostgreSQL
     runtimeOnly 'org.postgresql:postgresql'
 
-    // Flyway (spring-boot-starter-flyway 사용 필수 — Spring Boot 4 모듈화로
-    // flyway-core만 있으면 AutoConfiguration 비활성화됨. api-gateway와 동일 전략)
+    // Flyway
+    // flyway-core만 있으면 AutoConfiguration 비활성화됨)
     implementation 'org.springframework.boot:spring-boot-starter-flyway'
     implementation 'org.flywaydb:flyway-database-postgresql'
 
     // Redis (refresh token 캐시, 블랙리스트, 로그인 실패 카운트)
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
 
-    // JWK/JWT (EC(ES256) 키페어 관리, JWKS 응답 구성 — api-gateway와 동일 라이브러리로 통일)
+    // Rate Limiting (bucket4j)
+    implementation 'com.bucket4j:bucket4j_jdk17-core:8.14.0'
+    implementation 'com.bucket4j:bucket4j_jdk17-redis-common:8.14.0'
+    implementation 'com.bucket4j:bucket4j_jdk17-lettuce:8.14.0'
+
+    // JWK/JWT (EC(ES256) 키페어 관리, JWKS 응답 구성)
     implementation 'com.nimbusds:nimbus-jose-jwt:9.40'
 
-    // Actuator + Prometheus (헬스체크, 메트릭)
+    // Actuator + Prometheus
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'io.micrometer:micrometer-registry-prometheus'
 
@@ -58,11 +62,11 @@ dependencies {
     annotationProcessor 'org.projectlombok:lombok'
 
     // Test
-    testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test' // @DataJpaTest (구 패키지: org.springframework.boot.test.autoconfigure.orm.jpa -> org.springframework.boot.data.jpa.test.autoconfigure)
-    testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'   // 컨트롤러 테스트(@WebMvcTest, MockMvc) 대비 선반영
-    testImplementation 'org.springframework.boot:spring-boot-starter-security-test' // @WithMockUser 등 spring-security-test 기능이 정상 동작하려면 필요
+    testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-security-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-    testRuntimeOnly 'com.h2database:h2' // @DataJpaTest 용 인메모리 DB (실제 PostgreSQL 스키마와 100% 동일하지 않음, 슬라이스 테스트 용도)
+    testRuntimeOnly 'com.h2database:h2'
 }
 
 tasks.named('test') {

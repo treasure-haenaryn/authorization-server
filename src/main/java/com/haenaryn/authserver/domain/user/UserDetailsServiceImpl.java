@@ -1,32 +1,40 @@
 package com.haenaryn.authserver.domain.user;
 
+import com.haenaryn.authserver.config.AuthServerProperties;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Spring Security의 로그인 폼(username/password 인증)이 사용하는 {@link UserDetailsService}
  * 구현체. username 자리에 {@code User.email}을 그대로 사용한다.
  *
- * <p>계정 잠금(Phase4, 로그인 실패 5회) 로직은 여기 반영돼 있다 — {@code User.accountLocked}를
- * {@link UserDetails#isAccountNonLocked()}에 그대로 매핑해두면, 잠금 처리 자체는 나중에
- * 만들 로그인 실패 카운터 서비스에서 {@code User.lockAccount()}만 호출해주면 되고
- * 이 클래스는 수정할 필요가 없다.</p>
+ * <p>계정 잠금(Phase4, 로그인 실패 {@code loginFailLockThreshold}회) 상태를
+ * {@link UserDetails#isAccountNonLocked()}에 매핑한다. 잠금 후
+ * {@code loginFailWindowHours}가 지나면 자동으로 잠금을 풀어준다
  */
 @Service
 public class UserDetailsServiceImpl implements UserDetailsService {
 
     private final UserRepository userRepository;
+    private final AuthServerProperties properties;
 
-    public UserDetailsServiceImpl(UserRepository userRepository) {
+    public UserDetailsServiceImpl(UserRepository userRepository, AuthServerProperties properties) {
         this.userRepository = userRepository;
+        this.properties = properties;
     }
 
     @Override
+    @Transactional
     public UserDetails loadUserByUsername(String email) {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new UsernameNotFoundException("사용자를 찾을 수 없습니다: " + email));
+
+        if (user.isLockExpired(properties.security().loginFailWindowHours())) {
+            user.unlockAccount();
+        }
 
         return org.springframework.security.core.userdetails.User.builder()
                 .username(user.getEmail())

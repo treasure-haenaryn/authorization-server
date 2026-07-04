@@ -22,7 +22,6 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long
     /** rotation 이력 기록용 단건 조회 (family_id당 활성 토큰은 최대 1개). */
     Optional<RefreshToken> findFirstByFamilyIdAndRevokedFalse(String familyId);
 
-    /** 원자적 삽입 + 생성된 id 즉시 반환. 이미 존재하면 빈 Optional. */
     @Query(value = """
             INSERT INTO refresh_tokens (token_hash, family_id, user_id, client_id, expires_at)
             VALUES (:tokenHash, :familyId, :userId, :clientId, :expiresAt)

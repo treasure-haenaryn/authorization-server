@@ -7,7 +7,8 @@ public record AuthServerProperties(
         String issuer,
         Token token,
         Security security,
-        SigningKey signingKey
+        SigningKey signingKey,
+        RateLimit rateLimit
 ) {
     public record Token(
             long accessTokenTtlMinutes,
@@ -18,17 +19,21 @@ public record AuthServerProperties(
 
     public record Security(
             int loginFailLockThreshold,
-            long loginFailWindowHours
+            long loginFailWindowHours,
+            boolean requireHttps
     ) {
     }
 
     /**
-     * 서명 알고리즘은 ES256(EC P-256) 고정. API Gateway의 JwtFilter가 ECDSAVerifier
-     * 기준으로 구현되어 있어 알고리즘을 통일.
-     *
-     * <p>{@code encryptionKey}는 {@code source=DATABASE}일 때만 사용하는 AES-256 키
-     * (Base64, 32바이트). {@code jwk_keys.encrypted_private_key}를 복호화하는 데 쓴다.</p>
+     * Rate Limiting(bucket4j 토큰 버킷) 설정. {@code capacity}는 버킷 최대 용량(순간 버스트
+     * 허용량), {@code refillTokensPerMinute}는 분당 리필되는 토큰 수(평균 처리율)다.
      */
+    public record RateLimit(
+            int capacity,
+            int refillTokensPerMinute
+    ) {
+    }
+
     public record SigningKey(
             SigningKeySourceType source,
             String encryptionKey

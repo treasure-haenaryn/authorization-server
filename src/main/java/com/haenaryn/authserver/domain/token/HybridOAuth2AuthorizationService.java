@@ -18,9 +18,7 @@ import java.util.Optional;
 
 /**
  * authorization_code/access_token/id_token은 delegate(JDBC)에 위임하고, refresh_token만
- * 우리 refresh_tokens 테이블로 관리한다.
- *
- * <p>설계 근거와 상세 동작은 Obsidian "Authorization Server/Phase3_작업계획" 문서 참고.</p>
+ * 커스텀된 refresh_tokens 테이블로 관리한다.
  */
 public class HybridOAuth2AuthorizationService implements OAuth2AuthorizationService {
 
