@@ -18,11 +18,7 @@ import java.util.UUID;
 
 /**
  * dev 프로파일에서만 동작 — Authorization Code Flow / Client Credentials Flow를 수동으로
- * 검증할 수 있도록 샘플 클라이언트 2개를 기동 시 자동 등록한다.
- *
- * <p>모든 클라이언트의 토큰 TTL은 {@link AuthServerProperties#token()}에서 읽어와
- * 요구사항 문서의 값(Access 30분, Refresh 7일)과 항상 일치하게 만든다 — 클라이언트를
- * 새로 등록할 때마다 TTL을 직접 하드코딩하는 실수를 막기 위함.</p>
+ * 검증할 수 있도록 샘플 클라이언트 2개 등록
  */
 @Configuration
 @Profile("dev")
@@ -57,7 +53,7 @@ public class DevClientSeeder {
                             .build()
             );
 
-            // 요구사항 문서의 "이벤트/뉴스/빌링 서비스" M2M 통신을 흉내낸 클라이언트
+            // M2M 통신
             registerIfAbsent(registeredClientRepository, "event-service", () ->
                     RegisteredClient.withId(UUID.randomUUID().toString())
                             .clientId("event-service")

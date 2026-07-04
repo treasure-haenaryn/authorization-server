@@ -39,6 +39,10 @@ public class User {
     @Column(name = "account_locked", nullable = false)
     private boolean accountLocked;
 
+    /** 잠긴 시각. 자동 잠금 해제(loginFailWindowHours 경과) 판단에 사용. */
+    @Column(name = "account_locked_at")
+    private LocalDateTime accountLockedAt;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -58,9 +62,17 @@ public class User {
 
     public void lockAccount() {
         this.accountLocked = true;
+        this.accountLockedAt = LocalDateTime.now();
     }
 
     public void unlockAccount() {
         this.accountLocked = false;
+        this.accountLockedAt = null;
+    }
+
+    /** 잠금 후 지정된 시간이 지났으면 true — 자동 잠금 해제 판단용. */
+    public boolean isLockExpired(long windowHours) {
+        return accountLocked && accountLockedAt != null
+                && accountLockedAt.plusHours(windowHours).isBefore(LocalDateTime.now());
     }
 }

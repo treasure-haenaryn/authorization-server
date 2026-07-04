@@ -13,6 +13,8 @@ management:
 auth-server:
   signing-key:
     source: database # jwk_keys 테이블에서 AES-256 복호화 후 EC(P-256) 키 로드
+  security:
+    require-https: true
 
 logging:
   level:
