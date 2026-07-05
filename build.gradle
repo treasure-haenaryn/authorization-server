@@ -2,6 +2,7 @@ plugins {
     id 'java'
     id 'org.springframework.boot' version '4.0.7'
     id 'io.spring.dependency-management' version '1.1.7'
+    id 'jacoco'
 }
 
 group = 'com.haenaryn'
@@ -12,6 +13,10 @@ java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(25)
     }
+}
+
+jacoco {
+    toolVersion = "0.8.14"
 }
 
 repositories {
@@ -68,8 +73,68 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-starter-security-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     testRuntimeOnly 'com.h2database:h2'
+
+    // Testcontainers (Redis 강제 종료 시나리오, Authorization Code Flow 통합 테스트).
+    testImplementation 'org.springframework.boot:spring-boot-testcontainers'
+    testImplementation 'org.testcontainers:junit-jupiter:1.21.3'
+    testImplementation 'org.testcontainers:postgresql:1.21.3'
 }
 
 tasks.named('test') {
-    useJUnitPlatform()
+    useJUnitPlatform {
+        excludeTags 'integration'
+    }
+}
+
+jacocoTestReport {
+    dependsOn test, 'integrationTest'
+    executionData.setFrom(
+            layout.buildDirectory.file('jacoco/test.exec'),
+            layout.buildDirectory.file('jacoco/integrationTest.exec')
+    )
+    reports {
+        html.required = true
+        xml.required = true
+        csv.required = false
+    }
+}
+
+jacocoTestCoverageVerification {
+    dependsOn jacocoTestReport
+    executionData.setFrom(
+            layout.buildDirectory.file('jacoco/test.exec'),
+            layout.buildDirectory.file('jacoco/integrationTest.exec')
+    )
+    violationRules {
+        rule {
+            // 설정 클래스(Configuration), 애플리케이션 부트스트랩, 순수 DTO/Enum처럼
+            // 분기 로직이 없는 코드는 커버리지 제외.
+            excludes = [
+                    'com.haenaryn.authserver.AuthorizationServerApplication',
+                    'com.haenaryn.authserver.config.*',
+                    'com.haenaryn.authserver.exception.ErrorResponse'
+            ]
+            limit {
+                minimum = 0.80
+            }
+        }
+    }
+}
+check.dependsOn jacocoTestCoverageVerification
+
+tasks.register('integrationTest', Test) {
+    description = 'Runs integration tests tagged with @Tag("integration") (requires Docker for Testcontainers).'
+    group = 'verification'
+    // 커스텀 Test 태스크는 기본 `test` 태스크와 달리 testClassesDirs/classpath를 자동으로 채워주지 않는다.
+    // 이걸 빠뜨리면 테스트할 소스가 제외되고 조용히 스킵되고, 빌드는 그냥 성공해버린다.
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform {
+        includeTags 'integration'
+    }
+    shouldRunAfter test
+}
+
+tasks.named('check') {
+    dependsOn tasks.named('integrationTest')
 }
