@@ -92,7 +92,8 @@ public class HybridOAuth2AuthorizationService implements OAuth2AuthorizationServ
             return null;
         }
 
-        if (refreshToken.getExpiresAt().isBefore(LocalDateTime.now())) {
+        if (refreshToken.getExpiresAt().
+                isBefore(LocalDateTime.now())) {
             return null;
         }
 
@@ -102,21 +103,27 @@ public class HybridOAuth2AuthorizationService implements OAuth2AuthorizationServ
 
     /** 재사용(탈취 의심) 감지 시 family_id 체인 전체 폐기 + delegate의 authorization도 제거. */
     private void handleReuseDetected(RefreshToken reusedToken) {
-        refreshTokenRepository.bulkRevokeByFamilyId(
-                reusedToken.getFamilyId(), LocalDateTime.now(), "system-reuse-detected"
-        );
+        // bulkRevokeByFamilyId()는 @Modifying(clearAutomatically = true)라 실행 즉시 영속성 컨텍스트를
+        // 비운다(entityManager.clear()). 그러면 reusedToken이 detached 상태가 되고, 아직 초기화
+        // 안 된 지연 로딩(LAZY) 연관관계인 user를 그 뒤에 읽으려하면 LazyInitializationException이
+        // 터진다. 그래서 벌크 UPDATE 이후에 필요한 값(familyId, user, 이메일)을 미리 로컬
+        // 변수로 확보해둔 다음 벌크 UPDATE를 실행해야 한다.
+        String familyId = reusedToken.getFamilyId();
+        User user = reusedToken.getUser();
+        String userEmail = user.getEmail();
+
+        refreshTokenRepository.bulkRevokeByFamilyId(familyId, LocalDateTime.now(), "system-reuse-detected");
 
         refreshTokenHistoryRepository.save(RefreshTokenHistory.builder()
-                .user(reusedToken.getUser())
-                .familyId(reusedToken.getFamilyId())
+                .user(user)
+                .familyId(familyId)
                 .previousToken(reusedToken)
                 .eventType(RefreshTokenEventType.REUSE_DETECTED)
                 .build());
 
-        auditLogService.record(AuditEventType.REFRESH_TOKEN_REUSE_DETECTED,
-                reusedToken.getUser().getEmail(), "familyId=" + reusedToken.getFamilyId());
+        auditLogService.record(AuditEventType.REFRESH_TOKEN_REUSE_DETECTED, userEmail, "familyId=" + familyId);
 
-        OAuth2Authorization compromised = delegate.findById(reusedToken.getFamilyId());
+        OAuth2Authorization compromised = delegate.findById(familyId);
         if (compromised != null) {
             delegate.remove(compromised);
         }
