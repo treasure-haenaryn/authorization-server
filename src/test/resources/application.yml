@@ -7,3 +7,24 @@ spring:
     properties:
       hibernate:
         format_sql: true
+  data:
+    redis:
+      timeout: 2000ms
+      connect-timeout: 2000ms
+
+auth-server:
+  issuer: http://localhost:9000
+  token:
+    access-token-ttl-minutes: 30
+    id-token-ttl-minutes: 30
+    refresh-token-ttl-days: 7
+  security:
+    login-fail-lock-threshold: 5
+    login-fail-window-hours: 1
+    require-https: false
+  rate-limit:
+    capacity: 10
+    refill-tokens-per-minute: 10
+  signing-key:
+    source: in-memory
+    encryption-key:
