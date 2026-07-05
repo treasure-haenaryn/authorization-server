@@ -3,8 +3,10 @@ package com.haenaryn.authserver.config;
 import io.github.bucket4j.distributed.ExpirationAfterWriteStrategy;
 import io.github.bucket4j.redis.lettuce.Bucket4jLettuce;
 import io.github.bucket4j.redis.lettuce.cas.LettuceBasedProxyManager;
+import io.lettuce.core.ClientOptions;
 import io.lettuce.core.RedisClient;
 import io.lettuce.core.RedisURI;
+import io.lettuce.core.SocketOptions;
 import io.lettuce.core.api.StatefulRedisConnection;
 import io.lettuce.core.codec.ByteArrayCodec;
 import io.lettuce.core.codec.RedisCodec;
@@ -24,12 +26,18 @@ public class RateLimitConfig {
     @Bean(destroyMethod = "shutdown")
     public RedisClient bucket4jRedisClient(@Value("${spring.data.redis.host}") String host,
                                             @Value("${spring.data.redis.port}") int port,
-                                            @Value("${spring.data.redis.password:}") String password) {
-        RedisURI.Builder uriBuilder = RedisURI.builder().withHost(host).withPort(port);
+                                            @Value("${spring.data.redis.password:}") String password,
+                                            @Value("${spring.data.redis.connect-timeout:2s}") Duration connectTimeout,
+                                            @Value("${spring.data.redis.timeout:2s}") Duration commandTimeout) {
+        RedisURI.Builder uriBuilder = RedisURI.builder().withHost(host).withPort(port).withTimeout(commandTimeout);
         if (password != null && !password.isBlank()) {
             uriBuilder.withPassword(password.toCharArray());
         }
-        return RedisClient.create(uriBuilder.build());
+        RedisClient redisClient = RedisClient.create(uriBuilder.build());
+        redisClient.setOptions(ClientOptions.builder()
+                .socketOptions(SocketOptions.builder().connectTimeout(connectTimeout).build())
+                .build());
+        return redisClient;
     }
 
     @Bean(destroyMethod = "close")

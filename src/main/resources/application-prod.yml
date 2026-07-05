@@ -20,3 +20,8 @@ logging:
   level:
     com.haenaryn.authserver: INFO
     org.springframework.security: WARN
+  structured:
+    format:
+      # 중앙 로그 시스템(ELK/Loki 등)이 바로 파싱할 수 있도록 JSON 형태로 출력.
+      # Boot 4 내장 기능 — MDC 컨텍스트와 tracing(traceId/spanId)이 자동으로 포함.
+      console: ecs
