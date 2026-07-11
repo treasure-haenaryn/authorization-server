@@ -36,7 +36,10 @@ public record AuthServerProperties(
 
     public record SigningKey(
             SigningKeySourceType source,
-            String encryptionKey
+            String encryptionKey,
+            long rotationIntervalDays,
+            long gracePeriodMinutes,
+            long cacheTtlSeconds
     ) {
     }
 
