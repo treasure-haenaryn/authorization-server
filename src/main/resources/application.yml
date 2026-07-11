@@ -100,3 +100,6 @@ auth-server:
   signing-key:
     source: ${SIGNING_KEY_SOURCE:in-memory}
     encryption-key: ${ENCRYPTION_KEY:} # source=database일 때만 사용, Base64 인코딩된 AES-256 키(32바이트)
+    rotation-interval-days: 90 # ACTIVE 키가 이 기간을 넘기면 스케줄러가 자동 로테이션
+    grace-period-minutes: 60 # RETIRING 키가 검증(JWKS 노출)용으로 남는 기간. access/id token TTL(30분)보다 여유 있게
+    cache-ttl-seconds: 30 # 서명/검증 키 소스가 DB를 다시 조회하기까지의 캐시 유효시간 (로테이션 전파 지연 시간)
