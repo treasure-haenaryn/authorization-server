@@ -1,6 +1,8 @@
 services:
   auth-postgres:
-    image: postgres:16
+    build:
+      context: .
+      dockerfile: docker/postgres.Dockerfile
     container_name: auth-postgres
     restart: unless-stopped
     environment:
