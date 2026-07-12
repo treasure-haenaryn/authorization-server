@@ -147,13 +147,13 @@ public final class OAuth2AuthorizationCodeFlowHelper {
         return tokenResponse.getBody();
     }
 
-    private static String generateCodeVerifier() {
+    public static String generateCodeVerifier() {
         byte[] randomBytes = new byte[32];
         new SecureRandom().nextBytes(randomBytes);
         return Base64.getUrlEncoder().withoutPadding().encodeToString(randomBytes);
     }
 
-    private static String computeS256CodeChallenge(String codeVerifier) {
+    public static String computeS256CodeChallenge(String codeVerifier) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             byte[] hash = digest.digest(codeVerifier.getBytes(StandardCharsets.US_ASCII));
