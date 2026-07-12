@@ -11,10 +11,11 @@ management:
 
 auth-server:
   signing-key:
-    source: in-memory
+    source: database
 
 logging:
   level:
     com.haenaryn.authserver: DEBUG
     org.springframework.security: DEBUG
     org.springframework.security.oauth2: DEBUG
+    org.springframework.security.web.FilterChainProxy: DEBUG

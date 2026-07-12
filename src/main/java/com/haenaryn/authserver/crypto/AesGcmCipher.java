@@ -10,15 +10,7 @@ import java.util.Base64;
 
 /**
  * jwk_keys.encrypted_private_key(운영환경 EC 개인키) 암복호화용 AES-256-GCM 유틸리티.
- *
- * <p>refresh token(SHA-256 해시, 되돌릴 필요 없음)과 달리, EC 개인키는 실제로
- * 복호화해서 서명 연산에 다시 써야 하므로 암호화(encryption)를 쓴다. GCM 모드를
- * 선택한 이유는 암호문 자체에 무결성 검증(인증 태그)이 포함돼 있어, 별도의 HMAC
- * 없이도 변조 탐지가 되기 때문이다 (CBC 모드는 이 기능이 없어 별도 MAC이 필요함).</p>
- *
- * <p>출력 포맷: {@code Base64(IV(12바이트) + 암호문+인증태그)}. IV를 암호문 앞에 붙여
- * 저장하는 이유는 복호화 시 같은 IV가 필요한데, IV 자체는 비밀값이 아니라 매번
- * 무작위로 새로 생성해 함께 저장해도 안전하기 때문이다 (재사용만 금지).</p>
+ * 출력 포맷은 {@code Base64(IV(12바이트) + 암호문+인증태그)}.
  */
 public final class AesGcmCipher {
 

@@ -9,9 +9,9 @@ spring:
 
   # DataSource
   datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5433/authserver}
-    username: ${DB_USERNAME:authserver}
-    password: ${DB_PASSWORD:authserver}
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
     hikari:
       initialization-fail-timeout: 0 # DB 연결 실패 시 앱 기동 실패 방지 (0 = 대기)
@@ -36,13 +36,13 @@ spring:
   data:
     redis:
       host: ${REDIS_HOST:localhost}
-      port: ${REDIS_PORT:6379}
+      port: ${REDIS_PORT}
       password: ${REDIS_PASSWORD:}
       timeout: 2000ms
       connect-timeout: 2000ms
 
 server:
-  port: ${SERVER_PORT:9000}
+  port: ${SERVER_PORT}
 
 # Actuator + Prometheus + OpenTelemetry
 management:

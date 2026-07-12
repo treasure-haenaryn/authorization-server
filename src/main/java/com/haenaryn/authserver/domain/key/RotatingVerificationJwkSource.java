@@ -14,7 +14,7 @@ import java.time.Duration;
 import java.util.List;
 
 /**
- * JWKS(/.well-known/jwks.json)와 {@code JwtDecoder}(/userinfo 검증)가 쓰는 검증 전용
+ * JWKS({@code /oauth2/jwks})와 {@code JwtDecoder}(/userinfo 검증)가 쓰는 검증 전용
  * 키 소스. ACTIVE + RETIRING 키를 모두 노출한다.
  */
 @Component
