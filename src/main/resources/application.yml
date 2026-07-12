@@ -103,3 +103,5 @@ auth-server:
     rotation-interval-days: 90 # ACTIVE 키가 이 기간을 넘기면 스케줄러가 자동 로테이션
     grace-period-minutes: 60 # RETIRING 키가 검증(JWKS 노출)용으로 남는 기간. access/id token TTL(30분)보다 여유 있게
     cache-ttl-seconds: 30 # 서명/검증 키 소스가 DB를 다시 조회하기까지의 캐시 유효시간 (로테이션 전파 지연 시간)
+  retention:
+    purge-cron: "0 0 4 * * *" # 매일 04:00 pg_partman run_maintenance_proc 호출
