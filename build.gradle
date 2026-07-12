@@ -84,6 +84,13 @@ tasks.named('test') {
     useJUnitPlatform {
         excludeTags 'integration'
     }
+
+    testLogging {
+        events "passed", "skipped", "failed"
+        exceptionFormat = "full"
+        showStandardStreams = false
+        displayGranularity = 2
+    }
 }
 
 jacocoTestReport {
@@ -133,6 +140,13 @@ tasks.register('integrationTest', Test) {
         includeTags 'integration'
     }
     shouldRunAfter test
+
+    testLogging {
+        events "passed", "skipped", "failed"
+        exceptionFormat = "full"
+        showStandardStreams = false
+        displayGranularity = 2
+    }
 }
 
 tasks.named('check') {
