@@ -4,6 +4,7 @@ import com.haenaryn.authserver.domain.user.User;
 import com.haenaryn.authserver.domain.user.UserRepository;
 import com.haenaryn.authserver.integration.support.OAuth2AuthorizationCodeFlowHelper;
 import com.haenaryn.authserver.integration.support.OAuth2AuthorizationCodeFlowHelper.TokenResponse;
+import com.haenaryn.authserver.integration.support.PartmanPostgresImage;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -48,7 +49,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class LogoutFamilyRevocationIntegrationTest {
 
     @Container
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>(DockerImageName.parse("postgres:16"))
+    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>(PartmanPostgresImage.NAME)
             .withDatabaseName("authserver")
             .withUsername("authserver")
             .withPassword("authserver");

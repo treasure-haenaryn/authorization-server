@@ -1,6 +1,7 @@
 package com.haenaryn.authserver.integration;
 
 import com.haenaryn.authserver.integration.support.OAuth2AuthorizationCodeFlowHelper;
+import com.haenaryn.authserver.integration.support.PartmanPostgresImage;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -28,7 +29,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class JwksPublicAccessIntegrationTest {
 
     @Container
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>(DockerImageName.parse("postgres:16"))
+    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>(PartmanPostgresImage.NAME)
             .withDatabaseName("authserver")
             .withUsername("authserver")
             .withPassword("authserver");
