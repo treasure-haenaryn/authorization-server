@@ -17,7 +17,7 @@ import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.security.config.annotation.web.configuration.OAuth2AuthorizationServerConfiguration;
 
 /**
- * Authorization Server가 토큰 서명(JWS)과 {@code /.well-known/jwks.json} 노출에 사용할
+ * Authorization Server가 토큰 서명(JWS)과 {@code /oauth2/jwks} 노출에 사용할
  * EC(P-256) 키 소스를 구성한다. 서명 알고리즘은 ES256.
  */
 @Configuration
