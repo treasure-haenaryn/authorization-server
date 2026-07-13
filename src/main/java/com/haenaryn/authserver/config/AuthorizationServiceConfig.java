@@ -1,6 +1,7 @@
 package com.haenaryn.authserver.config;
 
 import com.haenaryn.authserver.domain.audit.AuditLogService;
+import com.haenaryn.authserver.domain.outbox.SecurityEventOutboxService;
 import com.haenaryn.authserver.domain.token.HybridOAuth2AuthorizationService;
 import com.haenaryn.authserver.domain.token.RefreshTokenHistoryRepository;
 import com.haenaryn.authserver.domain.token.RefreshTokenRepository;
@@ -29,13 +30,14 @@ public class AuthorizationServiceConfig {
                                                              RefreshTokenRepository refreshTokenRepository,
                                                              RefreshTokenHistoryRepository refreshTokenHistoryRepository,
                                                              UserRepository userRepository,
-                                                             AuditLogService auditLogService) {
+                                                             AuditLogService auditLogService,
+                                                             SecurityEventOutboxService securityEventOutboxService) {
         JdbcOAuth2AuthorizationService jdbcDelegate =
                 new JdbcOAuth2AuthorizationService(jdbcTemplate, registeredClientRepository);
 
         return new HybridOAuth2AuthorizationService(
                 jdbcDelegate, refreshTokenRepository, refreshTokenHistoryRepository,
-                userRepository, registeredClientRepository, auditLogService
+                userRepository, registeredClientRepository, auditLogService, securityEventOutboxService
         );
     }
 }
