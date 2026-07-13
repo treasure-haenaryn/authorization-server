@@ -1,6 +1,8 @@
 package com.haenaryn.authserver.domain.token;
 
+import com.haenaryn.authserver.domain.audit.AuditEventType;
 import com.haenaryn.authserver.domain.audit.AuditLogService;
+import com.haenaryn.authserver.domain.outbox.SecurityEventOutboxService;
 import com.haenaryn.authserver.domain.user.User;
 import com.haenaryn.authserver.domain.user.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -26,6 +28,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -52,6 +55,8 @@ class HybridOAuth2AuthorizationServiceTest {
     private RegisteredClientRepository registeredClientRepository;
     @Mock
     private AuditLogService auditLogService;
+    @Mock
+    private SecurityEventOutboxService securityEventOutboxService;
 
     private HybridOAuth2AuthorizationService service;
     private RegisteredClient registeredClient;
@@ -61,7 +66,7 @@ class HybridOAuth2AuthorizationServiceTest {
     void setUp() {
         service = new HybridOAuth2AuthorizationService(
                 delegate, refreshTokenRepository, refreshTokenHistoryRepository,
-                userRepository, registeredClientRepository, auditLogService
+                userRepository, registeredClientRepository, auditLogService, securityEventOutboxService
         );
 
         registeredClient = RegisteredClient.withId("internal-client-id")
@@ -280,6 +285,8 @@ class HybridOAuth2AuthorizationServiceTest {
         assertThat(result).isNull(); // 프레임워크가 invalid_grant로 해석하게 됨
         verify(refreshTokenRepository).bulkRevokeByFamilyId(eq("auth-3"), any(), eq("system-reuse-detected"));
         verify(delegate).remove(compromised); // 손상된 authorization도 JDBC에서 제거
+        // 알림 유실 방지용 아웃박스 적재 — revoke와 같은 트랜잭션 안에서 호출되어야 함
+        verify(securityEventOutboxService).record(eq(AuditEventType.REFRESH_TOKEN_REUSE_DETECTED), eq("lee@haenaryn.com"), anyMap());
 
         RefreshTokenHistory capturedHistory = captureLastSavedHistory();
         assertThat(capturedHistory.getEventType()).isEqualTo(RefreshTokenEventType.REUSE_DETECTED);

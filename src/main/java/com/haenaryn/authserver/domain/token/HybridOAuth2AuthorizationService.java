@@ -2,6 +2,7 @@ package com.haenaryn.authserver.domain.token;
 
 import com.haenaryn.authserver.domain.audit.AuditEventType;
 import com.haenaryn.authserver.domain.audit.AuditLogService;
+import com.haenaryn.authserver.domain.outbox.SecurityEventOutboxService;
 import com.haenaryn.authserver.domain.user.User;
 import com.haenaryn.authserver.domain.user.UserRepository;
 import org.slf4j.Logger;
@@ -16,6 +17,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -34,19 +37,22 @@ public class HybridOAuth2AuthorizationService implements OAuth2AuthorizationServ
     private final UserRepository userRepository;
     private final RegisteredClientRepository registeredClientRepository;
     private final AuditLogService auditLogService;
+    private final SecurityEventOutboxService securityEventOutboxService;
 
     public HybridOAuth2AuthorizationService(OAuth2AuthorizationService delegate,
                                              RefreshTokenRepository refreshTokenRepository,
                                              RefreshTokenHistoryRepository refreshTokenHistoryRepository,
                                              UserRepository userRepository,
                                              RegisteredClientRepository registeredClientRepository,
-                                             AuditLogService auditLogService) {
+                                             AuditLogService auditLogService,
+                                             SecurityEventOutboxService securityEventOutboxService) {
         this.delegate = delegate;
         this.refreshTokenRepository = refreshTokenRepository;
         this.refreshTokenHistoryRepository = refreshTokenHistoryRepository;
         this.userRepository = userRepository;
         this.registeredClientRepository = registeredClientRepository;
         this.auditLogService = auditLogService;
+        this.securityEventOutboxService = securityEventOutboxService;
     }
 
     @Override
@@ -117,6 +123,14 @@ public class HybridOAuth2AuthorizationService implements OAuth2AuthorizationServ
                 .build());
 
         auditLogService.record(AuditEventType.REFRESH_TOKEN_REUSE_DETECTED, userEmail, "familyId=" + familyId);
+
+        // 알림 유실이 허용되지 않는 이벤트라 AFTER_COMMIT 비동기 리스너가 아니라 이 트랜잭션
+        // 안에서 직접 적재한다 — family revoke와 원자적으로 커밋된다.
+        Map<String, String> payload = new LinkedHashMap<>();
+        payload.put("familyId", familyId);
+        payload.put("deviceInfo", reusedToken.getDeviceInfo());
+        payload.put("ipAddress", reusedToken.getIpAddress());
+        securityEventOutboxService.record(AuditEventType.REFRESH_TOKEN_REUSE_DETECTED, userEmail, payload);
 
         OAuth2Authorization compromised = delegate.findById(familyId);
         if (compromised != null) {
