@@ -4,6 +4,7 @@ import io.github.bucket4j.ConsumptionProbe;
 import io.github.bucket4j.distributed.BucketProxy;
 import io.github.bucket4j.distributed.proxy.RemoteBucketBuilder;
 import io.github.bucket4j.redis.lettuce.cas.LettuceBasedProxyManager;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import jakarta.servlet.FilterChain;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -44,11 +45,13 @@ class RateLimitFilterTest {
     @Mock
     private FilterChain filterChain;
 
+    private CircuitBreaker circuitBreaker;
     private RateLimitFilter filter;
 
     @BeforeEach
     void setUp() {
-        filter = new RateLimitFilter(proxyManager, 10, 10);
+        circuitBreaker = CircuitBreaker.ofDefaults("test");
+        filter = new RateLimitFilter(proxyManager, 10, 10, circuitBreaker);
         when(proxyManager.builder()).thenReturn(bucketBuilder);
         when(bucketBuilder.build(any(String.class), any(Supplier.class))).thenReturn(bucket);
     }
@@ -114,5 +117,21 @@ class RateLimitFilterTest {
         filter.doFilter(request, response, filterChain);
 
         verify(filterChain).doFilter(request, response);
+    }
+
+    @Test
+    void fails_open_when_circuit_breaker_is_open_without_even_calling_proxy_manager() throws Exception {
+        // Redis가 "느려지기만" 해서 서킷이 OPEN된 상황 — 타임아웃을 기다리지 않고 바로 통과해야 한다.
+        circuitBreaker.transitionToOpenState();
+
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setRequestURI("/oauth2/token");
+        request.setRemoteAddr("127.0.0.1");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        filter.doFilter(request, response, filterChain);
+
+        verify(filterChain).doFilter(request, response);
+        verifyNoInteractions(proxyManager);
     }
 }

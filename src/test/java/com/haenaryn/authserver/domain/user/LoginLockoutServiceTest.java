@@ -4,6 +4,7 @@ import com.haenaryn.authserver.cache.RedisKeys;
 import com.haenaryn.authserver.config.AuthServerProperties;
 import com.haenaryn.authserver.domain.audit.AuditEventType;
 import com.haenaryn.authserver.domain.audit.AuditLogService;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -24,11 +25,12 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
- * 로그인 실패 시 Redis 카운터 증가/임계값 도달 시 계정 잠금, Redis 장애 시 PostgreSQL 폴백,
- * 그리고 로그인 성공 시 카운터 리셋이 정확히 동작하는지 검증한다.
+ * 로그인 실패 시 Redis 카운터 증가/임계값 도달 시 계정 잠금, Redis 장애/서킷 OPEN 시
+ * PostgreSQL 폴백, 그리고 로그인 성공 시 카운터 리셋이 정확히 동작하는지 검증한다.
  */
 @ExtendWith(MockitoExtension.class)
 class LoginLockoutServiceTest {
@@ -45,12 +47,14 @@ class LoginLockoutServiceTest {
     @Mock
     private AuditLogService auditLogService;
 
+    private CircuitBreaker circuitBreaker;
     private LoginLockoutService service;
 
     @BeforeEach
     void setUp() {
         AuthServerProperties properties = new AuthServerProperties(null, null, SECURITY, null, null);
-        service = new LoginLockoutService(redisTemplate, userRepository, properties, auditLogService);
+        circuitBreaker = CircuitBreaker.ofDefaults("test");
+        service = new LoginLockoutService(redisTemplate, userRepository, properties, auditLogService, circuitBreaker);
     }
 
     @Test
@@ -123,6 +127,22 @@ class LoginLockoutServiceTest {
         when(userRepository.findByEmail("ghost@haenaryn.com")).thenReturn(Optional.empty());
 
         assertDoesNotThrow(() -> service.registerFailure("ghost@haenaryn.com"));
+    }
+
+    @Test
+    void registerFailure_falls_back_to_postgresql_when_circuit_breaker_is_open_without_even_calling_redis() {
+        // Redis가 "느려지기만" 해서 서킷이 OPEN된 상황 — 타임아웃을 기다리지 않고 바로
+        // PostgreSQL 폴백으로 넘어가야 한다.
+        circuitBreaker.transitionToOpenState();
+        User user = User.builder().email("lee@haenaryn.com").passwordHash("hashed").build();
+        when(userRepository.findByEmail("lee@haenaryn.com")).thenReturn(Optional.of(user));
+
+        for (int i = 0; i < 5; i++) {
+            service.registerFailure("lee@haenaryn.com");
+        }
+
+        assertThat(user.isAccountLocked()).isTrue();
+        verifyNoInteractions(redisTemplate);
     }
 
     @Test

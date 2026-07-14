@@ -1,6 +1,7 @@
 package com.haenaryn.authserver.security;
 
 import com.haenaryn.authserver.cache.RedisKeys;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import jakarta.servlet.FilterChain;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -26,7 +27,7 @@ import static org.mockito.Mockito.when;
 
 /**
  * {@code /userinfo}에서 블랙리스트(로그아웃) 등록된 Access Token을 거부하는 필터 검증.
- * Redis 장애 시에는 fail-open으로 통과시켜야 한다.
+ * Redis 장애/서킷 OPEN 시에는 fail-open으로 통과시켜야 한다.
  */
 @ExtendWith(MockitoExtension.class)
 class AccessTokenBlacklistFilterTest {
@@ -36,11 +37,13 @@ class AccessTokenBlacklistFilterTest {
     @Mock
     private FilterChain filterChain;
 
+    private CircuitBreaker circuitBreaker;
     private AccessTokenBlacklistFilter filter;
 
     @BeforeEach
     void setUp() {
-        filter = new AccessTokenBlacklistFilter(redisTemplate);
+        circuitBreaker = CircuitBreaker.ofDefaults("test");
+        filter = new AccessTokenBlacklistFilter(redisTemplate, circuitBreaker);
     }
 
     @AfterEach
@@ -111,5 +114,21 @@ class AccessTokenBlacklistFilterTest {
         filter.doFilter(request, response, filterChain);
 
         verify(filterChain).doFilter(request, response);
+    }
+
+    @Test
+    void fails_open_when_circuit_breaker_is_open_without_even_calling_redis() throws Exception {
+        // Redis가 "느려지기만" 해서 서킷이 OPEN된 상황을 재현한다 — 이때는 Redis를 아예
+        // 호출하지 않고(타임아웃을 기다리지 않고) 바로 fail-open으로 통과해야 한다.
+        circuitBreaker.transitionToOpenState();
+        SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(jwtWithJti("jti-any")));
+
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        filter.doFilter(request, response, filterChain);
+
+        verify(filterChain).doFilter(request, response);
+        verifyNoInteractions(redisTemplate);
     }
 }
