@@ -51,6 +51,7 @@ dependencies {
     implementation 'com.bucket4j:bucket4j_jdk17-core:8.14.0'
     implementation 'com.bucket4j:bucket4j_jdk17-redis-common:8.14.0'
     implementation 'com.bucket4j:bucket4j_jdk17-lettuce:8.14.0'
+    implementation 'io.github.resilience4j:resilience4j-circuitbreaker:2.3.0'
 
     // JWK/JWT (EC(ES256) 키페어 관리, JWKS 응답 구성)
     implementation 'com.nimbusds:nimbus-jose-jwt:9.40'

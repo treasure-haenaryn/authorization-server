@@ -5,6 +5,7 @@ import io.github.bucket4j.Bucket;
 import io.github.bucket4j.BucketConfiguration;
 import io.github.bucket4j.ConsumptionProbe;
 import io.github.bucket4j.redis.lettuce.cas.LettuceBasedProxyManager;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -30,11 +31,14 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
     private final LettuceBasedProxyManager<String> proxyManager;
     private final BucketConfiguration bucketConfiguration;
+    private final CircuitBreaker circuitBreaker;
 
     public RateLimitFilter(LettuceBasedProxyManager<String> proxyManager,
                             int capacity,
-                            int refillTokensPerMinute) {
+                            int refillTokensPerMinute,
+                            CircuitBreaker circuitBreaker) {
         this.proxyManager = proxyManager;
+        this.circuitBreaker = circuitBreaker;
         this.bucketConfiguration = BucketConfiguration.builder()
                 .addLimit(limit -> limit.capacity(capacity).refillGreedy(refillTokensPerMinute, Duration.ofMinutes(1)))
                 .build();
@@ -55,8 +59,10 @@ public class RateLimitFilter extends OncePerRequestFilter {
         String key = "rate_limit:" + path + ":" + clientIp;
 
         try {
-            Bucket bucket = proxyManager.builder().build(key, () -> bucketConfiguration);
-            ConsumptionProbe probe = bucket.tryConsumeAndReturnRemaining(1);
+            ConsumptionProbe probe = circuitBreaker.executeSupplier(() -> {
+                Bucket bucket = proxyManager.builder().build(key, () -> bucketConfiguration);
+                return bucket.tryConsumeAndReturnRemaining(1);
+            });
 
             if (probe.isConsumed()) {
                 response.setHeader("X-RateLimit-Remaining", String.valueOf(probe.getRemainingTokens()));
@@ -69,7 +75,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
             writeTooManyRequests(response, retryAfterSeconds);
         } catch (Exception e) {
             // Fail-open
-            log.warn("Redis 장애로 Rate Limiting 체크 실패, fail-open으로 통과: key={}", key, e);
+            log.warn("Redis 장애/서킷 OPEN으로 Rate Limiting 체크 실패, fail-open으로 통과: key={}", key, e);
             filterChain.doFilter(request, response);
         }
     }

@@ -2,6 +2,7 @@ package com.haenaryn.authserver.security;
 
 import com.haenaryn.authserver.cache.RedisKeys;
 import com.haenaryn.authserver.exception.ErrorResponse;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -26,9 +27,11 @@ public class AccessTokenBlacklistFilter extends OncePerRequestFilter {
     private static final Logger log = LoggerFactory.getLogger(AccessTokenBlacklistFilter.class);
 
     private final RedisTemplate<String, String> redisTemplate;
+    private final CircuitBreaker circuitBreaker;
 
-    public AccessTokenBlacklistFilter(RedisTemplate<String, String> redisTemplate) {
+    public AccessTokenBlacklistFilter(RedisTemplate<String, String> redisTemplate, CircuitBreaker circuitBreaker) {
         this.redisTemplate = redisTemplate;
+        this.circuitBreaker = circuitBreaker;
     }
 
     @Override
@@ -51,10 +54,11 @@ public class AccessTokenBlacklistFilter extends OncePerRequestFilter {
 
     private boolean isBlacklisted(String jti) {
         try {
-            return Boolean.TRUE.equals(redisTemplate.hasKey(RedisKeys.blacklist(jti)));
+            return Boolean.TRUE.equals(
+                    circuitBreaker.executeSupplier(() -> redisTemplate.hasKey(RedisKeys.blacklist(jti))));
         } catch (Exception e) {
             // Fail-open
-            log.warn("Redis 장애로 블랙리스트 체크 실패, fail-open으로 통과: jti={}", jti, e);
+            log.warn("Redis 장애/서킷 OPEN으로 블랙리스트 체크 실패, fail-open으로 통과: jti={}", jti, e);
             return false;
         }
     }
