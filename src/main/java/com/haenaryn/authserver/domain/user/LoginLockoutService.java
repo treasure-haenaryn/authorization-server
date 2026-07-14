@@ -4,6 +4,7 @@ import com.haenaryn.authserver.cache.RedisKeys;
 import com.haenaryn.authserver.config.AuthServerProperties;
 import com.haenaryn.authserver.domain.audit.AuditEventType;
 import com.haenaryn.authserver.domain.audit.AuditLogService;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -22,23 +23,26 @@ public class LoginLockoutService {
     private final UserRepository userRepository;
     private final AuthServerProperties properties;
     private final AuditLogService auditLogService;
+    private final CircuitBreaker circuitBreaker;
 
     public LoginLockoutService(RedisTemplate<String, String> redisTemplate,
                                 UserRepository userRepository,
                                 AuthServerProperties properties,
-                                AuditLogService auditLogService) {
+                                AuditLogService auditLogService,
+                                CircuitBreaker circuitBreaker) {
         this.redisTemplate = redisTemplate;
         this.userRepository = userRepository;
         this.properties = properties;
         this.auditLogService = auditLogService;
+        this.circuitBreaker = circuitBreaker;
     }
 
     @Transactional
     public void registerFailure(String email) {
         try {
-            registerFailureViaRedis(email);
+            circuitBreaker.executeRunnable(() -> registerFailureViaRedis(email));
         } catch (Exception e) {
-            log.warn("Redis 장애로 로그인 실패 카운트 실패, PostgreSQL 폴백으로 전환: email={}", email, e);
+            log.warn("Redis 장애/서킷 OPEN으로 로그인 실패 카운트 실패, PostgreSQL 폴백으로 전환: email={}", email, e);
             registerFailureViaDatabaseFallback(email);
         }
 
@@ -48,7 +52,7 @@ public class LoginLockoutService {
     @Transactional
     public void resetFailureCounters(String email) {
         try {
-            redisTemplate.delete(RedisKeys.loginFail(email));
+            circuitBreaker.executeRunnable(() -> redisTemplate.delete(RedisKeys.loginFail(email)));
         } catch (Exception e) {
             log.warn("Redis 장애로 로그인 실패 카운터 초기화 실패 (무시하고 진행): email={}", email, e);
         }

@@ -6,6 +6,7 @@ import com.haenaryn.authserver.security.LoginFailureHandler;
 import com.haenaryn.authserver.security.LoginSuccessHandler;
 import com.haenaryn.authserver.security.RateLimitFilter;
 import io.github.bucket4j.redis.lettuce.cas.LettuceBasedProxyManager;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
@@ -36,7 +37,8 @@ public class AuthorizationServerConfig {
     public SecurityFilterChain authorizationServerSecurityFilterChain(HttpSecurity http,
                                                                         AuthServerProperties properties,
                                                                         RedisTemplate<String, String> redisTemplate,
-                                                                        LettuceBasedProxyManager<String> rateLimitProxyManager) throws Exception {
+                                                                        LettuceBasedProxyManager<String> rateLimitProxyManager,
+                                                                        CircuitBreaker redisCircuitBreaker) throws Exception {
         http
                 // .oidc()를 getEndpointsMatcher()보다 먼저 호출해야 OIDC 엔드포인트가 매처에 포함된다.
                 .oauth2AuthorizationServer((authorizationServer) -> {
@@ -59,12 +61,13 @@ public class AuthorizationServerConfig {
                         .maxAgeInSeconds(31536000)
                 ))
                 .addFilterAfter(
-                        new AccessTokenBlacklistFilter(redisTemplate),
+                        new AccessTokenBlacklistFilter(redisTemplate, redisCircuitBreaker),
                         BearerTokenAuthenticationFilter.class
                 )
                 .addFilterBefore(
                         new RateLimitFilter(rateLimitProxyManager,
-                                properties.rateLimit().capacity(), properties.rateLimit().refillTokensPerMinute()),
+                                properties.rateLimit().capacity(), properties.rateLimit().refillTokensPerMinute(),
+                                redisCircuitBreaker),
                         UsernamePasswordAuthenticationFilter.class
                 )
                 .addFilterAfter(new CacheControlHeaderFilter(), HeaderWriterFilter.class);
@@ -82,7 +85,8 @@ public class AuthorizationServerConfig {
                                                             LoginSuccessHandler loginSuccessHandler,
                                                             LoginFailureHandler loginFailureHandler,
                                                             AuthServerProperties properties,
-                                                            LettuceBasedProxyManager<String> rateLimitProxyManager) throws Exception {
+                                                            LettuceBasedProxyManager<String> rateLimitProxyManager,
+                                                            CircuitBreaker redisCircuitBreaker) throws Exception {
         http
                 .authorizeHttpRequests((authorize) -> authorize
                         .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
@@ -100,7 +104,8 @@ public class AuthorizationServerConfig {
                 ))
                 .addFilterBefore(
                         new RateLimitFilter(rateLimitProxyManager,
-                                properties.rateLimit().capacity(), properties.rateLimit().refillTokensPerMinute()),
+                                properties.rateLimit().capacity(), properties.rateLimit().refillTokensPerMinute(),
+                                redisCircuitBreaker),
                         UsernamePasswordAuthenticationFilter.class
                 );
 
