@@ -27,8 +27,8 @@ public class RateLimitConfig {
     public RedisClient bucket4jRedisClient(@Value("${spring.data.redis.host}") String host,
                                             @Value("${spring.data.redis.port}") int port,
                                             @Value("${spring.data.redis.password:}") String password,
-                                            @Value("${spring.data.redis.connect-timeout:2s}") Duration connectTimeout,
-                                            @Value("${spring.data.redis.timeout:2s}") Duration commandTimeout) {
+                                            @Value("${spring.data.redis.connect-timeout:500ms}") Duration connectTimeout,
+                                            @Value("${spring.data.redis.timeout:500ms}") Duration commandTimeout) {
         RedisURI.Builder uriBuilder = RedisURI.builder().withHost(host).withPort(port).withTimeout(commandTimeout);
         if (password != null && !password.isBlank()) {
             uriBuilder.withPassword(password.toCharArray());
